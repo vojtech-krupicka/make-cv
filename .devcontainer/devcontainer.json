@@ -1,0 +1,39 @@
+{
+  "name": "Make My CV",
+
+  // Build straight from the Dockerfile at the repo root.
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile"
+  },
+
+  // The Dockerfile sets ENTRYPOINT/CMD for running make_cv.py directly;
+  // override both so the container just stays up with a shell for
+  // interactive dev work instead.
+  "entrypoint": "",
+  "overrideCommand": true,
+
+  // Mount the whole repo (containing make_cv.py, templates, data, etc.)
+  // and open it as the workspace.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.debugpy",
+        "charliermarsh.ruff",
+        "James-Yu.latex-workshop",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3"
+      }
+    }
+  },
+
+  // Handy inside the container once it's up:
+  //   python3 make_cv.py -t template.tex.jinja -d data.yaml -o cv --pdf
+  "postCreateCommand": "python3 --version && latexmk --version"
+}
