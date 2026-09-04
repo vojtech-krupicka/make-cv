@@ -1,3 +1,4 @@
 Jinja2>=3.1,<4
 PyYAML>=6.0,<7
 pydantic>=2.0,<3
+kachlog==1.2.1

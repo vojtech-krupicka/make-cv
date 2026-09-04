@@ -62,18 +62,12 @@ def load_data(data_path: Path) -> dict[str, Any]:
     elif suffix in JSON_SUFFIXES:
         raw = json.loads(text)
     else:
-        raise ValueError(
-            f"Unsupported data file suffix '{suffix}'. "
-            "Expected one of: .yaml, .yml, .json"
-        )
+        raise ValueError(f"Unsupported data file suffix '{suffix}'. Expected one of: .yaml, .yml, .json")
 
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Top-level content of '{data_path}' must be a mapping/object, "
-            f"got {type(raw).__name__}."
-        )
+        raise TypeError(f"Top-level content of '{data_path}' must be a mapping/object, got {type(raw).__name__}.")
     return raw
 
 
@@ -124,9 +118,7 @@ def render_tex(template_path: Path, data: dict[str, Any]) -> str:
     return template.render(**data)
 
 
-def resolve_output_paths(
-    data_path: Path, output_arg: str | None
-) -> tuple[Path, Path]:
+def resolve_output_paths(data_path: Path, output_arg: str | None) -> tuple[Path, Path]:
     """
     Work out the .tex and .pdf output paths.
 
@@ -151,8 +143,7 @@ def check_overwrite(paths: list[Path], overwrite: bool) -> None:
     if existing and not overwrite:
         names = ", ".join(str(p) for p in existing)
         print(
-            f"Error: output file(s) already exist: {names}\n"
-            "Use --overwrite to allow replacing them.",
+            f"Error: output file(s) already exist: {names}\nUse --overwrite to allow replacing them.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -179,7 +170,7 @@ def compile_pdf(tex_path: Path, pdf_path: Path) -> None:
         str(tex_path),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
     if result.returncode != 0:
         print("LaTeX compilation failed:\n", file=sys.stderr)
@@ -189,8 +180,7 @@ def compile_pdf(tex_path: Path, pdf_path: Path) -> None:
 
     if not pdf_path.exists():
         print(
-            f"Error: latexmk reported success but '{pdf_path}' was not "
-            "produced.",
+            f"Error: latexmk reported success but '{pdf_path}' was not produced.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -204,8 +194,7 @@ def compile_pdf(tex_path: Path, pdf_path: Path) -> None:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Render a LaTeX file from a Jinja2 template and a YAML/JSON "
-            "data file, and optionally compile it to PDF."
+            "Render a LaTeX file from a Jinja2 template and a YAML/JSON data file, and optionally compile it to PDF."
         )
     )
     parser.add_argument(

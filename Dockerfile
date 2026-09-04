@@ -16,6 +16,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # image).
 # --------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        sudo \
+        nano \
         python3 \
         python3-pip \
         latexmk \
