@@ -23,6 +23,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -38,10 +39,60 @@ from pydantic import BaseModel, ValidationError
 # finalized.
 
 
+class Education(BaseModel):
+    university: str
+    address: str
+    faculty: str
+    timespan: str = ""
+    fields_of_study: list[str]
+
+
+class JobProject(BaseModel):
+    name: str
+    timespan: str = ""
+    description: list[str] | None = None
+
+
+class Experience(BaseModel):
+    company: str
+    address: str
+    position: str
+    timespan: str = ""
+    projects: list[JobProject] | None = None
+    description: list[str] | None = None
+
+
+class Skills(BaseModel):
+    key: str
+    value: str
+
+
+class Language(BaseModel):
+    name: str
+    description: str
+
+
 class CVData(BaseModel):
     """Schema for the input YAML/JSON data file."""
 
     model_config = {"extra": "allow"}
+
+    fullname: str
+
+    phone: str
+    email: str
+    address: str
+    linkedin: str | None = None
+    github: str | None = None
+
+    position: str
+    summary: str
+
+    education: Education
+    experience: list[Experience]
+    skills: list[Skills]
+    languages: list[Language]
+    hobbies: str
 
 
 # --------------------------------------------------------------------------
@@ -149,8 +200,26 @@ def check_overwrite(paths: list[Path], overwrite: bool) -> None:
         sys.exit(1)
 
 
+def print_log_file(log_path: Path) -> None:
+    """Print the contents of a LaTeX .log file, if it exists."""
+    if not log_path.is_file():
+        print(f"(no log file found at {log_path})")
+        return
+    print(f"----- {log_path.name} -----")
+    print(log_path.read_text(encoding="utf-8", errors="replace"))
+    print(f"----- end {log_path.name} -----")
+
+
 def compile_pdf(tex_path: Path, pdf_path: Path) -> None:
-    """Compile tex_path to PDF using latexmk, producing pdf_path."""
+    """
+    Compile tex_path to PDF using latexmk.
+
+    All of latexmk's auxiliary/output files (.aux, .log, .fls, .fdb_latexmk,
+    the intermediate .pdf, etc.) are built in a temporary directory so they
+    never land next to the source. Only the final PDF is copied to
+    pdf_path; the .log is printed for visibility before the temp dir is
+    cleaned up.
+    """
     if shutil.which("latexmk") is None:
         print(
             "Error: 'latexmk' was not found on PATH. Install a LaTeX "
@@ -160,30 +229,46 @@ def compile_pdf(tex_path: Path, pdf_path: Path) -> None:
         )
         sys.exit(1)
 
-    cmd = [
-        "latexmk",
-        "-pdf",
-        "-interaction=nonstopmode",
-        "-halt-on-error",
-        f"-output-directory={tex_path.parent}",
-        f"-jobname={pdf_path.stem}",
-        str(tex_path),
-    ]
+    with tempfile.TemporaryDirectory(prefix="make_cv_latex_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        jobname = pdf_path.stem
 
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        cmd = [
+            "latexmk",
+            "-pdf",
+            "-interaction=nonstopmode",
+            "-halt-on-error",
+            f"-output-directory={tmp_path}",
+            f"-jobname={jobname}",
+            str(tex_path),
+        ]
 
-    if result.returncode != 0:
-        print("LaTeX compilation failed:\n", file=sys.stderr)
-        print(result.stdout, file=sys.stderr)
-        print(result.stderr, file=sys.stderr)
-        sys.exit(1)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
-    if not pdf_path.exists():
-        print(
-            f"Error: latexmk reported success but '{pdf_path}' was not produced.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        log_path = tmp_path / f"{jobname}.log"
+        tmp_pdf_path = tmp_path / f"{jobname}.pdf"
+
+        if result.returncode != 0:
+            print("LaTeX compilation failed:\n", file=sys.stderr)
+            print(result.stdout, file=sys.stderr)
+            print(result.stderr, file=sys.stderr)
+            print_log_file(log_path)
+            sys.exit(1)
+
+        if not tmp_pdf_path.exists():
+            print(
+                f"Error: latexmk reported success but '{tmp_pdf_path.name}' was not produced.",
+                file=sys.stderr,
+            )
+            print_log_file(log_path)
+            sys.exit(1)
+
+        print_log_file(log_path)
+
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tmp_pdf_path, pdf_path)
+        # tmp_dir (and all its .aux/.fls/.fdb_latexmk/etc. clutter) is
+        # removed automatically when this `with` block exits.
 
 
 # --------------------------------------------------------------------------
@@ -254,6 +339,7 @@ def main(argv: list[str] | None = None) -> None:
 
     raw_data = load_data(data_path)
     validated = validate_data(raw_data)
+    print(validated.model_dump_json())
 
     # Render using the validated data (as a plain dict) so the template
     # sees exactly the fields defined/allowed by CVData.
