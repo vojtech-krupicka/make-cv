@@ -29,47 +29,76 @@ from typing import Any
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 # --------------------------------------------------------------------------
 # Pydantic data model
 # --------------------------------------------------------------------------
-# TODO: replace with the real fields for your CV data. Left permissive for
-# now so the script runs end-to-end; tighten this up once the schema is
-# finalized.
+# Schema for the CV data file (YAML or JSON). Free text fields (summary,
+# description bullets, etc.) are expected to already contain any
+# LaTeX-escaping/markup needed (e.g. "\&", "\\textbf{...}") since they are
+# inserted into the template as-is.
 
 
 class Education(BaseModel):
-    university: str
-    address: str
-    faculty: str
-    timespan: str = ""
-    fields_of_study: list[str]
+    """A single (most recent / highest) degree entry."""
+
+    university: str = Field(..., description="Name of the university/school.")
+    address: str = Field(..., description="City/country of the university.")
+    faculty: str = Field(..., description="Faculty or department name.")
+    timespan: str = Field(default="", description="Study period, e.g. '2006 -- 2012'.")
+    fields_of_study: list[str] = Field(
+        ...,
+        description=(
+            "One entry per degree/thesis, as a ready-to-render LaTeX string (may include \\textbf, \\emph, etc.)."
+        ),
+    )
 
 
 class JobProject(BaseModel):
-    name: str
-    timespan: str = ""
-    description: list[str] | None = None
+    """A notable project within a single job (Experience entry)."""
+
+    name: str = Field(..., description="Project name/title.")
+    timespan: str = Field(default="", description="Project period, e.g. '2018 -- 2026'.")
+    description: list[str] | None = Field(
+        default=None,
+        description="Bullet points describing the project, in display order.",
+    )
 
 
 class Experience(BaseModel):
-    company: str
-    address: str
-    position: str
-    timespan: str = ""
-    projects: list[JobProject] | None = None
-    description: list[str] | None = None
+    """A single job/employer entry in the work-experience section."""
+
+    company: str = Field(..., description="Employer/company name.")
+    address: str = Field(..., description="City/country of the employer.")
+    position: str = Field(..., description="Job title held at this company.")
+    timespan: str = Field(default="", description="Employment period, e.g. '2012 -- 2026'.")
+    projects: list[JobProject] | None = Field(
+        default=None,
+        description=(
+            "Notable projects at this job, used instead of (or alongside) "
+            "a flat 'description' list for jobs with multiple distinct "
+            "projects worth breaking out."
+        ),
+    )
+    description: list[str] | None = Field(
+        default=None,
+        description=("Bullet points describing this job, for jobs simple enough not to need a 'projects' breakdown."),
+    )
 
 
 class Skills(BaseModel):
-    key: str
-    value: str
+    """One row of the skills section: a category and its contents."""
+
+    key: str = Field(..., description="Skill category label, e.g. 'Languages'.")
+    value: str = Field(..., description="Comma-separated skills within that category.")
 
 
 class Language(BaseModel):
-    name: str
-    description: str
+    """A spoken/written language and the candidate's proficiency in it."""
+
+    name: str = Field(..., description="Language name, e.g. 'English'.")
+    description: str = Field(..., description="Proficiency level or free-text description.")
 
 
 class CVData(BaseModel):
@@ -77,22 +106,22 @@ class CVData(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    fullname: str
+    fullname: str = Field(..., description="Full name as shown in the CV header.")
 
-    phone: str
-    email: str
-    address: str
-    linkedin: str | None = None
-    github: str | None = None
+    phone: str = Field(..., description="Phone number (LaTeX-escaped if needed).")
+    email: str = Field(..., description="Contact email address.")
+    address: str = Field(..., description="City/country of residence.")
+    linkedin: str | None = Field(default=None, description="Full LinkedIn profile URL, if any.")
+    github: str | None = Field(default=None, description="Full GitHub profile URL, if any.")
 
-    position: str
-    summary: str
+    position: str = Field(..., description="Headline job title shown under the name.")
+    summary: str = Field(..., description="Short professional summary/profile paragraph.")
 
-    education: Education
-    experience: list[Experience]
-    skills: list[Skills]
-    languages: list[Language]
-    hobbies: str
+    education: Education = Field(..., description="Education entry.")
+    experience: list[Experience] = Field(..., description="Work experience entries, most recent first.")
+    skills: list[Skills] = Field(..., description="Skill categories, in display order.")
+    languages: list[Language] = Field(..., description="Languages spoken, in display order.")
+    hobbies: str = Field(..., description="Freeform hobbies/interests line.")
 
 
 # --------------------------------------------------------------------------
