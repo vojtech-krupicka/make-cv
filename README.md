@@ -1,6 +1,6 @@
 # Make My CV
 
-A small CV/resume generator: fill in a YAML or JSON data file,
+A small, no-nonsense CV/resume generator: fill in a YAML or JSON data file,
 render it into a LaTeX template with Jinja2, and (optionally) compile it
 straight to PDF — with all of LaTeX's auxiliary-file clutter kept out of
 your repository.
@@ -205,11 +205,39 @@ A spoken/written language and the candidate's proficiency in it.
 | `name`        | `str` | ✅        | Language name, e.g. `'English'`.        |
 | `description` | `str` | ✅        | Proficiency level or free-text description. |
 
+## Running tests
+
+The project has a `unittest`-based test suite in `test_make_cv.py`, covering
+data loading, Pydantic validation, Jinja2/LaTeX rendering, output-path
+resolution, overwrite protection, PDF compilation, and CLI argument
+parsing.
+
+PDF compilation is tested by mocking out `latexmk`/`subprocess.run`, so the
+suite runs fully without a LaTeX installation.
+
+Run the whole suite from the project root:
+
+```bash
+python3 -m unittest test_make_cv.py -v
+```
+
+Or run a single test class or test case:
+
+```bash
+python3 -m unittest test_make_cv.TestValidateData -v
+python3 -m unittest test_make_cv.TestCompilePdf.test_successful_build_copies_pdf_and_cleans_up_temp_dir -v
+```
+
+This works the same way inside the Docker/devcontainer setup, since
+`requirements.txt` is installed there already; no LaTeX distribution is
+needed just to run the tests.
+
 ## Project layout
 
 ```
 .
 ├── make_cv.py               # main script
+├── test_make_cv.py           # unittest test suite
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                 # Debian Bookworm + Python + latexmk/TeX Live
 ├── .devcontainer/
