@@ -5,6 +5,7 @@ __pycache__/
 
 # Data folder
 data
+.vscode/launch.json
 
 # C extensions
 *.so

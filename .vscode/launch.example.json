@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Make My CV",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "make_cv.py",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "-t", "./data/example-cv.tex.jinja",
+                "-d", "./data/example-cv.yaml",
+                "--pdf",
+                "--overwrite"
+            ]
+        }
+    ]
+}
