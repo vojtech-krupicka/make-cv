@@ -94,35 +94,79 @@ The project ships with a `Dockerfile` (Debian Bookworm + Python 3 +
 `latexmk`/TeX Live) and a `.devcontainer/devcontainer.json` that builds
 straight from it.
 
-**To open it in VS Code:**
+### Container layout
+
+- The image builds from the `Dockerfile` at the repo root and runs as a
+  non-root **`vscode`** user (UID/GID `1000`, passwordless `sudo`). Using
+  UID `1000` means files written into the mounted folders stay owned by
+  your host user rather than by `root`.
+- The repo itself is mounted at **`/app`** (the workspace folder inside
+  the container).
+- A sibling **`my-cv`** folder — `../my-cv`, next to this repo on the host
+  — is mounted at **`/app/data`**. This is where your personal CV inputs
+  (Jinja/YAML) and generated outputs (`.tex`/`.pdf`) live, kept entirely
+  out of this repo. It can be a plain directory or a separate git
+  checkout (e.g. a private `my-cv` repo). **Create it before reopening in
+  the container**, otherwise the bind mount fails:
+
+  ```bash
+  mkdir -p ../my-cv
+  ```
+
+  Inside the repo, `data/` is just the (gitignored) mount point for this
+  folder.
+
+### To open it in VS Code
 
 1. Install the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension.
-2. Open this project folder in VS Code.
-3. Run **Dev Containers: Reopen in Container** from the Command Palette
+2. Ensure a `../my-cv` folder exists next to this repo (see above).
+3. Open this project folder in VS Code.
+4. Run **Dev Containers: Reopen in Container** from the Command Palette
    (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-4. VS Code builds the image (Python, `latexmk`, TeX Live packages,
+5. VS Code builds the image (Python, `latexmk`, TeX Live packages,
    `requirements.txt` deps) and reopens the folder inside the container,
-   with the Python, LaTeX Workshop, and YAML extensions pre-installed.
-5. Once inside, just run the script from the integrated terminal:
+   with the Python, Ruff, LaTeX Workshop, and YAML extensions
+   pre-installed.
+6. Once inside, run the script from the integrated terminal, pointing at
+   files under `data/`:
 
    ```bash
-   python3 make_cv.py -t template.tex.jinja -d vojtech-krupicka.yaml -o output/cv --pdf --overwrite
+   python3 make_cv.py -t data/template.tex.jinja -d data/your-cv.yaml -o data/output/cv --pdf --overwrite
    ```
 
-**Without VS Code**, the same image works directly with plain Docker:
+### Debugging in VS Code
+
+`.vscode/launch.json` holds a **"Make My CV"** debug configuration that
+runs `make_cv.py` under `debugpy` with a fixed set of arguments. Because
+those arguments reference personal data-file names, the real
+`launch.json` is **gitignored**; a sanitised
+[`.vscode/launch.example.json`](./.vscode/launch.example.json) is checked
+in instead.
+
+Copy it and adjust the `args` to your own template/data files:
+
+```bash
+cp .vscode/launch.example.json .vscode/launch.json
+```
+
+Then pick **"Make My CV"** in the Run and Debug panel (`F5`).
+
+### Without VS Code
+
+The same image works directly with plain Docker. Mount your inputs/outputs
+folder at `/app/data`:
 
 ```bash
 docker build -t make_cv .
-docker run --rm -v "$PWD:/data" make_cv \
-    -t /data/template.tex.jinja -d /data/vojtech-krupicka.yaml -o /data/output/cv --pdf --overwrite
+docker run --rm -v "$(cd ../my-cv && pwd):/app/data" make_cv \
+    -t /app/data/template.tex.jinja -d /app/data/your-cv.yaml -o /app/data/output/cv --pdf --overwrite
 ```
 
 ## Data file format
 
 The data file (YAML or JSON) is validated against the `CVData` Pydantic
-model below before rendering. See
-[`vojtech-krupicka.yaml`](./vojtech-krupicka.yaml) for a full real-world
-example.
+model below before rendering. Keep your own data and template files in the
+`../my-cv` folder (mounted at `data/`), not in this repo.
 
 ## Model Schema
 
@@ -207,10 +251,10 @@ A spoken/written language and the candidate's proficiency in it.
 
 ## Running tests
 
-The project has a `unittest`-based test suite in `test_make_cv.py`, covering
-data loading, Pydantic validation, Jinja2/LaTeX rendering, output-path
-resolution, overwrite protection, PDF compilation, and CLI argument
-parsing.
+The project has a `unittest`-based test suite in `tests/test_make_cv.py`,
+covering data loading, Pydantic validation, Jinja2/LaTeX rendering,
+output-path resolution, overwrite protection, PDF compilation, and CLI
+argument parsing.
 
 PDF compilation is tested by mocking out `latexmk`/`subprocess.run`, so the
 suite runs fully without a LaTeX installation.
@@ -218,14 +262,14 @@ suite runs fully without a LaTeX installation.
 Run the whole suite from the project root:
 
 ```bash
-python3 -m unittest test_make_cv.py -v
+python3 -m unittest discover -s tests -v
 ```
 
 Or run a single test class or test case:
 
 ```bash
-python3 -m unittest test_make_cv.TestValidateData -v
-python3 -m unittest test_make_cv.TestCompilePdf.test_successful_build_copies_pdf_and_cleans_up_temp_dir -v
+python3 -m unittest tests.test_make_cv.TestValidateData -v
+python3 -m unittest tests.test_make_cv.TestCompilePdf.test_successful_build_copies_pdf_and_cleans_up_temp_dir -v
 ```
 
 This works the same way inside the Docker/devcontainer setup, since
@@ -236,12 +280,16 @@ needed just to run the tests.
 
 ```
 .
-├── make_cv.py               # main script
-├── test_make_cv.py           # unittest test suite
-├── requirements.txt          # Python dependencies
-├── Dockerfile                 # Debian Bookworm + Python + latexmk/TeX Live
+├── make_cv.py                 # main script
+├── tests/
+│   └── test_make_cv.py        # unittest test suite
+├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Debian Bookworm + Python + latexmk/TeX Live, runs as user "vscode"
 ├── .devcontainer/
-│   └── devcontainer.json      # VS Code Dev Container config
-├── template.tex.jinja         # your Jinja2/LaTeX template (not included above)
-└── vojtech-krupicka.yaml      # example data file
+│   └── devcontainer.json      # VS Code Dev Container config (mounts ../my-cv at /app/data)
+├── .vscode/
+│   ├── launch.example.json    # checked-in debug config template
+│   ├── launch.json            # your personal debug config (gitignored)
+│   └── settings.json          # editor / test-runner settings
+└── data/                      # gitignored mount point for ../my-cv (templates + data + output)
 ```
