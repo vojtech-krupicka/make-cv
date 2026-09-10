@@ -6,10 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The project has not had a tagged release yet; everything below is the
-history so far.
+## [0.1.0] - 2026-09-10
+
+First tagged release. Everything below is the history that led to it.
 
 ### Added
+- PEP 723 inline script metadata in `make_cv.py`, so it runs standalone
+  with `uv run make_cv.py …` (no virtualenv, no `pip install`).
+- `Release` GitHub Actions workflow: on a `v*` tag it runs the tests,
+  builds and pushes the Docker image to GHCR
+  (`ghcr.io/vojtech-krupicka/py-make-my-cv`), and creates a GitHub
+  Release with notes taken from this file and `make_cv.py` attached.
 - `make_cv.py`: render a LaTeX `.tex` file from a Jinja2 template and a
   YAML/JSON data file, with optional `--pdf` compilation.
   - LaTeX-friendly Jinja2 delimiters (`(( ))`, `((* *))`, `((# #))`,
@@ -67,3 +74,6 @@ history so far.
 - `data/xkrupi06.tex.jinja` template.
 - Personal CV data, `.tex`, and `.pdf` files from version control; the
   `data/` directory and `.vscode/launch.json` are now gitignored.
+
+[Unreleased]: https://github.com/vojtech-krupicka/py-make-my-cv/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/vojtech-krupicka/py-make-my-cv/releases/tag/v0.1.0
