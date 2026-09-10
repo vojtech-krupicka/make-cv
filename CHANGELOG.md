@@ -22,7 +22,13 @@ history so far.
     `.aux`/`.fls`/`.fdb_latexmk`/etc. clutter is discarded.
   - CLI: `-t/--template`, `-d/--data`, `-o/--output`, `--pdf`,
     `--overwrite`; output base name derived from the data file when `-o`
-    is omitted; overwrite protection on existing `.tex`/`.pdf`.
+    is omitted; overwrite protection on existing `.tex`/`.md`/`.pdf`.
+- Markdown output: every run also writes a `<base>.md` file next to the
+  `.tex` file (no flag), rendered from a Jinja template embedded in
+  `make_cv.py` (`MARKDOWN_TEMPLATE`). A `latex_to_markdown()` filter
+  converts the common LaTeX markup in the data (`\textbf{}`/`\emph{}`,
+  backslash escapes, `\ `, `--`/`---`, inline `$…$`) back to plain
+  Markdown.
 - `Dockerfile` (Debian Bookworm + Python 3 + `latexmk`/TeX Live) and a
   `.devcontainer/devcontainer.json` for a ready-to-use VS Code Dev
   Container, with Python, Ruff, LaTeX Workshop, and YAML extensions.
@@ -42,8 +48,9 @@ history so far.
   failure.
 - Example LaTeX templates and CV data files.
 - `unittest` test suite in `tests/test_make_cv.py` covering data loading,
-  validation, rendering, output-path resolution, overwrite protection,
-  PDF compilation (mocked), and CLI parsing.
+  validation, rendering, LaTeX→Markdown conversion, output-path
+  resolution, overwrite protection, PDF compilation (mocked), and CLI
+  parsing.
 - Expanded `README.md`: usage, template syntax, model schema, Docker /
   Dev Container instructions, and test instructions.
 

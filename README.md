@@ -3,7 +3,8 @@
 A small, no-nonsense CV/resume generator: fill in a YAML or JSON data file,
 render it into a LaTeX template with Jinja2, and (optionally) compile it
 straight to PDF — with all of LaTeX's auxiliary-file clutter kept out of
-your repository.
+your repository. Every run also drops a plain-Markdown version of the same
+CV next to the `.tex` file.
 
 ## Features
 
@@ -18,6 +19,10 @@ your repository.
   `latexmk`; only the final `.pdf` is copied back out, the build log is
   printed for visibility, and every `.aux`/`.fls`/`.fdb_latexmk`/etc. file
   is discarded automatically.
+- **Markdown sidecar**: a `.md` version of the CV is always written next to
+  the `.tex` file, from a template baked into `make_cv.py`. Common LaTeX
+  markup in the data (`\textbf{}`, `\emph{}`, `\&`, `\ `, `---`, inline
+  `$…$`) is converted back to plain Markdown.
 - **Dockerized**, with a ready-to-use VS Code Dev Container.
 
 ## Requirements
@@ -38,31 +43,34 @@ For `--pdf` you additionally need a LaTeX distribution providing
 ```
 usage: make_cv.py [-h] -t TEMPLATE -d DATA [-o OUTPUT] [--pdf] [--overwrite]
 
-Render a LaTeX file from a Jinja2 template and a YAML/JSON data file, and
-optionally compile it to PDF.
+Render a LaTeX file (and a Markdown sidecar) from a Jinja2 template and a
+YAML/JSON data file, and optionally compile the LaTeX to PDF.
 
 options:
-  -h, --help            show this help message and exit
-  -t TEMPLATE, --template TEMPLATE
-                        Path to the Jinja2 template file.
-  -d DATA, --data DATA  Path to the input YAML/JSON data file.
-  -o OUTPUT, --output OUTPUT
-                        Output base name (no suffix needed). If omitted, the
-                        name is derived from the data file, with the .tex/.pdf
-                        suffix added as appropriate.
-  --pdf                 Additionally compile the rendered .tex file to PDF.
-  --overwrite           Allow overwriting existing output .tex/.pdf files.
+  -h, --help           show this help message and exit
+  -t, --template TEMPLATE
+                       Path to the Jinja2 template file.
+  -d, --data DATA      Path to the input YAML/JSON data file.
+  -o, --output OUTPUT  Output base name (no suffix needed). If omitted, the
+                       name is derived from the data file, with the
+                       .tex/.md/.pdf suffix added as appropriate.
+  --pdf                Additionally compile the rendered .tex file to PDF.
+  --overwrite          Allow overwriting existing output .tex/.md/.pdf files.
 ```
+
+Each run writes `<base>.tex` **and** `<base>.md`; `--pdf` additionally
+produces `<base>.pdf`. All of them are covered by the `--overwrite` check.
 
 ### Examples
 
-Render only the `.tex` file, named after the data file (`vojtech-krupicka.tex`):
+Render the `.tex` and `.md` files, named after the data file
+(`vojtech-krupicka.tex` / `vojtech-krupicka.md`):
 
 ```bash
 python3 make_cv.py -t template.tex.jinja -d vojtech-krupicka.yaml
 ```
 
-Render and compile to PDF, choosing an explicit output base name:
+Render and also compile to PDF, choosing an explicit output base name:
 
 ```bash
 python3 make_cv.py -t template.tex.jinja -d vojtech-krupicka.yaml \
@@ -87,6 +95,29 @@ own use of curly braces, so templates use a remapped syntax instead:
 | Blocks          | `((* if cond *)) ... ((* endif *))` |
 | Comments        | `((# a comment #))`              |
 | Line statements | `%% for item in items`           |
+
+### Markdown output
+
+Alongside the `.tex` file, `make_cv.py` always writes a `<base>.md` file
+rendered from a Jinja template **embedded in the script itself**
+(`MARKDOWN_TEMPLATE` in `make_cv.py`) — there is no separate template file
+and no flag to enable it. It uses standard Jinja delimiters (`{{ }}` /
+`{% %}`), since Markdown has no quarrel with braces.
+
+Because the data file is written LaTeX-first, free-text fields are passed
+through a `latex_to_markdown()` filter that converts the common cases:
+
+| In the data (LaTeX)      | In the `.md` output |
+| ------------------------ | ------------------- |
+| `\textbf{x}`             | `**x**`             |
+| `\emph{x}` / `\textit{x}`| `*x*`               |
+| `\&` `\%` `\#` `\_` `\$` | `&` `%` `#` `_` `$`  |
+| `\ ` (TeX space), `\\`   | space               |
+| `--` / `---`             | `–` / `—`           |
+| `$…$` (inline math)      | delimiters dropped, `\cdot` → `·` |
+
+Anything it doesn't recognise is left as-is, so unusual markup may need a
+manual touch-up in the generated `.md`.
 
 ## Running via Docker / VS Code Dev Container
 
@@ -253,8 +284,9 @@ A spoken/written language and the candidate's proficiency in it.
 
 The project has a `unittest`-based test suite in `tests/test_make_cv.py`,
 covering data loading, Pydantic validation, Jinja2/LaTeX rendering,
-output-path resolution, overwrite protection, PDF compilation, and CLI
-argument parsing.
+LaTeX→Markdown conversion and the Markdown template, output-path
+resolution, overwrite protection, PDF compilation, and CLI argument
+parsing.
 
 PDF compilation is tested by mocking out `latexmk`/`subprocess.run`, so the
 suite runs fully without a LaTeX installation.

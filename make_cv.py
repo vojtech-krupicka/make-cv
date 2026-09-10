@@ -4,7 +4,8 @@ make_cv.py
 
 Render a LaTeX (.tex) file from a Jinja2 template and a YAML/JSON data
 file, validate the data with a Pydantic model, and optionally compile
-the result to PDF.
+the result to PDF. A plain-Markdown (.md) rendering, using a template
+baked into this module, is always written alongside the .tex file.
 
 Tested target: Python 3 as shipped with Debian Bookworm (3.11).
 
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -198,6 +200,140 @@ def render_tex(template_path: Path, data: dict[str, Any]) -> str:
     return template.render(**data)
 
 
+# --------------------------------------------------------------------------
+# Markdown output
+# --------------------------------------------------------------------------
+# The CV data is written LaTeX-first: free-text fields already contain TeX
+# markup/escaping (\textbf{}, \&, \ , ---, inline $...$, etc.). For the
+# Markdown rendering we translate the common cases back to plain Markdown,
+# then render an embedded (baked-in) Jinja template. The Markdown file is
+# always written alongside the .tex file, using the same base name.
+
+_TEX_MARKUP_RE = [
+    (re.compile(r"\\textbf\{([^{}]*)\}"), r"**\1**"),
+    (re.compile(r"\\(?:emph|textit)\{([^{}]*)\}"), r"*\1*"),
+    (re.compile(r"\\texttt\{([^{}]*)\}"), r"`\1`"),
+]
+
+_TEX_SYMBOLS = {
+    r"\cdot": "\u00b7",
+    r"\times": "\u00d7",
+    r"\ldots": "\u2026",
+    r"\dots": "\u2026",
+}
+
+
+def latex_to_markdown(text: str) -> str:
+    """Best-effort conversion of LaTeX-flavoured free text to plain Markdown.
+
+    Handles the markup that actually shows up in the CV data: ``\\textbf``/
+    ``\\emph`` become ``**``/``*``, backslash-escaped characters are
+    unescaped, TeX spacing (``\\ ``, ``~``) and dashes (``--``, ``---``) are
+    normalised, and inline math ``$...$`` delimiters are dropped. Anything
+    it doesn't recognise is passed through untouched.
+    """
+    if not text:
+        return text
+
+    result = text
+    for pattern, repl in _TEX_MARKUP_RE:
+        result = pattern.sub(repl, result)
+
+    result = re.sub(r"\$([^$]*)\$", r"\1", result)
+    for tex, char in _TEX_SYMBOLS.items():
+        result = result.replace(tex, char)
+
+    result = result.replace("\\ ", " ").replace("~", " ").replace("\\\\", " ")
+    result = re.sub(r"\\([&%#_${}])", r"\1", result)
+    result = result.replace("---", "\u2014").replace("--", "\u2013")
+    result = re.sub(r"[ \t]{2,}", " ", result)
+    return result.strip()
+
+
+MARKDOWN_TEMPLATE = """\
+# {{ fullname }}
+
+{{ phone | md }} \u00b7 {{ email }}\
+{% if linkedin %} \u00b7 {{ linkedin | replace("https://", "") | replace("http://", "") }}{% endif %}\
+{% if github %} \u00b7 {{ github | replace("https://", "") | replace("http://", "") }}{% endif %} \u00b7 {{ address }}
+
+**{{ position | md }}**
+
+{{ summary | md }}
+
+---
+
+## Experience
+
+{% for job in experience %}
+### {{ job.company | md }}{{ (", " ~ (job.address | md)) if job.address else "" }} \u2014 *{{ job.position | md }}*{{ (" \u2014 " ~ (job.timespan | md)) if job.timespan else "" }}
+
+{% if job.projects %}
+{% for project in job.projects %}
+**{{ project.name | md }}{% if project.timespan %} ({{ project.timespan | md }}){% endif %}**
+
+{% if project.description %}
+{% for item in project.description %}
+- {{ item | md }}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+{% elif job.description %}
+{% for item in job.description %}
+- {{ item | md }}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+## Technical Skills
+
+{% for skill in skills %}
+- **{{ skill.key | md }}:** {{ skill.value | md }}
+{% endfor %}
+
+## Education
+
+**{{ education.university | md }}** \u2014 {{ education.faculty | md }}{{ (" (" ~ (education.timespan | md) ~ ")") if education.timespan else "" }}
+
+{% for item in education.fields_of_study %}
+- {{ item | md }}
+{% endfor %}
+
+## Languages
+
+{% for lang in languages %}
+- **{{ lang.name | md }}** \u2014 {{ lang.description | md }}
+{% endfor %}
+
+## Hobbies
+
+{{ hobbies | md }}
+"""
+
+
+def build_markdown_env() -> Environment:
+    """Jinja2 environment for the embedded Markdown template (standard
+    delimiters; no filesystem loader)."""
+    env = Environment(
+        trim_blocks=True,
+        lstrip_blocks=True,
+        autoescape=False,
+        undefined=StrictUndefined,
+    )
+    env.filters["md"] = latex_to_markdown
+    return env
+
+
+def render_markdown(data: dict[str, Any]) -> str:
+    """Render the CV data to Markdown using the baked-in template."""
+    template = build_markdown_env().from_string(MARKDOWN_TEMPLATE)
+    rendered = template.render(**data)
+    rendered = re.sub(r"[ \t]+\n", "\n", rendered)
+    rendered = re.sub(r"\n{3,}", "\n\n", rendered)
+    return rendered.strip() + "\n"
+
+
 def resolve_output_paths(data_path: Path, output_arg: str | None) -> tuple[Path, Path]:
     """
     Work out the .tex and .pdf output paths.
@@ -308,7 +444,8 @@ def compile_pdf(tex_path: Path, pdf_path: Path) -> None:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Render a LaTeX file from a Jinja2 template and a YAML/JSON data file, and optionally compile it to PDF."
+            "Render a LaTeX file (and a Markdown sidecar) from a Jinja2 template and a YAML/JSON data file, "
+            "and optionally compile the LaTeX to PDF."
         )
     )
     parser.add_argument(
@@ -331,8 +468,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Output base name (no suffix needed). If omitted, the name is "
-            "derived from the data file, with the .tex/.pdf suffix added "
-            "as appropriate."
+            "derived from the data file, with the .tex/.md/.pdf suffix "
+            "added as appropriate."
         ),
     )
     parser.add_argument(
@@ -343,7 +480,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Allow overwriting existing output .tex/.pdf files.",
+        help="Allow overwriting existing output .tex/.md/.pdf files.",
     )
     return parser.parse_args(argv)
 
@@ -362,21 +499,26 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     tex_path, pdf_path = resolve_output_paths(data_path, args.output)
+    md_path = tex_path.with_suffix(".md")
 
-    targets = [tex_path] + ([pdf_path] if args.pdf else [])
+    targets = [tex_path, md_path] + ([pdf_path] if args.pdf else [])
     check_overwrite(targets, args.overwrite)
 
     raw_data = load_data(data_path)
     validated = validate_data(raw_data)
     print(validated.model_dump_json())
 
-    # Render using the validated data (as a plain dict) so the template
-    # sees exactly the fields defined/allowed by CVData.
-    rendered = render_tex(template_path, validated.model_dump())
+    # Render using the validated data (as a plain dict) so the templates
+    # see exactly the fields defined/allowed by CVData.
+    data = validated.model_dump()
+    rendered = render_tex(template_path, data)
 
     tex_path.parent.mkdir(parents=True, exist_ok=True)
     tex_path.write_text(rendered, encoding="utf-8")
     print(f"Wrote {tex_path}")
+
+    md_path.write_text(render_markdown(data), encoding="utf-8")
+    print(f"Wrote {md_path}")
 
     if args.pdf:
         compile_pdf(tex_path, pdf_path)

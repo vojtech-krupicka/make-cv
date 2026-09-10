@@ -33,8 +33,10 @@ from make_cv import (
     build_jinja_env,
     check_overwrite,
     compile_pdf,
+    latex_to_markdown,
     load_data,
     print_log_file,
+    render_markdown,
     render_tex,
     resolve_output_paths,
     validate_data,
@@ -212,6 +214,76 @@ class TestJinjaRendering(unittest.TestCase):
         template_path.write_text("(((missing)))")
         with self.assertRaises(Exception):
             render_tex(template_path, {})
+
+
+class TestLatexToMarkdown(unittest.TestCase):
+    """Tests for latex_to_markdown(): TeX free text -> plain Markdown."""
+
+    def test_bold_and_emphasis(self) -> None:
+        self.assertEqual(latex_to_markdown(r"\textbf{Bold} and \emph{em}"), "**Bold** and *em*")
+        self.assertEqual(latex_to_markdown(r"\textit{also em}"), "*also em*")
+
+    def test_unescapes_backslash_escaped_characters(self) -> None:
+        self.assertEqual(latex_to_markdown(r"Agile \& Scrum, C\#, 100\%"), "Agile & Scrum, C#, 100%")
+
+    def test_tex_spacing_and_line_breaks(self) -> None:
+        self.assertEqual(latex_to_markdown(r"+420\ 721\ 749\ 393"), "+420 721 749 393")
+
+    def test_dashes(self) -> None:
+        self.assertEqual(latex_to_markdown("2019 -- 2026"), "2019 – 2026")
+        self.assertEqual(latex_to_markdown("Platform --- Solo Dev"), "Platform — Solo Dev")
+
+    def test_inline_math_is_unwrapped(self) -> None:
+        self.assertEqual(latex_to_markdown(r"MantisBT $1.3$ to $2.x$"), "MantisBT 1.3 to 2.x")
+        self.assertEqual(latex_to_markdown(r"Advanced $\cdot$ Intermediate"), "Advanced · Intermediate")
+
+    def test_empty_input_passes_through(self) -> None:
+        self.assertEqual(latex_to_markdown(""), "")
+
+
+class TestRenderMarkdown(unittest.TestCase):
+    """Tests for render_markdown() and the embedded Markdown template."""
+
+    def setUp(self) -> None:
+        self.data = validate_data(MINIMAL_VALID_DATA).model_dump()
+
+    def test_renders_expected_sections(self) -> None:
+        md = render_markdown(self.data)
+        self.assertTrue(md.startswith("# Jane Doe\n"))
+        for heading in ("## Experience", "## Technical Skills", "## Education", "## Languages", "## Hobbies"):
+            self.assertIn(f"\n{heading}\n", md)
+        self.assertTrue(md.endswith("\n"))
+        self.assertNotIn("\n\n\n", md)
+
+    def test_job_with_flat_description_lists_bullets(self) -> None:
+        md = render_markdown(self.data)
+        self.assertIn("### Acme Corp", md)
+        self.assertIn("- Built things.", md)
+        self.assertIn("- Fixed things.", md)
+
+    def test_job_with_projects_renders_project_headings(self) -> None:
+        data = validate_data(
+            {
+                **MINIMAL_VALID_DATA,
+                "experience": [
+                    {
+                        "company": "Acme Corp",
+                        "address": "Springfield, USA",
+                        "position": "Backend Developer",
+                        "projects": [{"name": "Project A", "timespan": "2020 -- 2021", "description": ["Did X."]}],
+                    }
+                ],
+            }
+        ).model_dump()
+        md = render_markdown(data)
+        self.assertIn("**Project A (2020 – 2021)**", md)
+        self.assertIn("- Did X.", md)
+
+    def test_optional_contact_fields_are_omitted_when_absent(self) -> None:
+        md = render_markdown(self.data)
+        contact_line = md.splitlines()[2]
+        self.assertIn("jane@example.com", contact_line)
+        self.assertNotIn("None", contact_line)
 
 
 class TestResolveOutputPaths(unittest.TestCase):
@@ -445,6 +517,22 @@ class TestMainIntegration(unittest.TestCase):
         content = tex_path.read_text()
         self.assertIn("Hello, Jane Doe !", content)
         self.assertFalse(out_base.with_suffix(".pdf").exists())
+
+        # The Markdown file is always written alongside the .tex file.
+        md_path = out_base.with_suffix(".md")
+        self.assertTrue(md_path.exists())
+        self.assertIn("# Jane Doe", md_path.read_text())
+
+    def test_main_refuses_to_overwrite_existing_md_without_flag(self) -> None:
+        out_base = self.tmp_path / "cv"
+        md_path = out_base.with_suffix(".md")
+        md_path.write_text("existing markdown")
+
+        with self.assertRaises(SystemExit) as ctx:
+            make_cv.main(["-t", str(self.template_path), "-d", str(self.data_path), "-o", str(out_base)])
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertEqual(md_path.read_text(), "existing markdown")
+        self.assertFalse(out_base.with_suffix(".tex").exists())
 
     def test_main_refuses_to_overwrite_without_flag(self) -> None:
         out_base = self.tmp_path / "cv"
