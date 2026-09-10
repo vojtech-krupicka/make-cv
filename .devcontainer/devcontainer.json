@@ -19,8 +19,8 @@
       "dockerfile": "${localWorkspaceFolder}/Dockerfile"
   },
   "mounts": [
-      "source=${localWorkspaceFolder}/../my-cv,target=/app/data,type=bind",
-      "source=${localWorkspaceFolder},target=/app,type=bind"
+    "source=${localWorkspaceFolder},target=/app,type=bind",
+    "source=${localWorkspaceFolder}/../my-cv,target=/app/data,type=bind"
   ],
   "remoteUser": "vscode",
   "workspaceFolder": "/app"
