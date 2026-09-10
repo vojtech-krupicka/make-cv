@@ -27,16 +27,27 @@ CV next to the `.tex` file.
 
 ## Requirements
 
-Run locally (without Docker):
+`make_cv.py` targets Python 3.11+ and needs `jinja2`, `pyyaml`, and
+`pydantic`. Pick one:
 
 ```bash
+# no install — deps are declared inline in the script (PEP 723)
+uv run make_cv.py -t template.tex.jinja -d data.yaml
+
+# or install them into the current environment
 pip install -r requirements.txt
 ```
 
 For `--pdf` you additionally need a LaTeX distribution providing
-`latexmk`/`pdflatex` (e.g. `apt install texlive-latex-extra latexmk`, or
-`texlive-full` for a fuller install). If you're using the provided
-`Dockerfile` or devcontainer, this is already taken care of.
+`latexmk`/`pdflatex`:
+
+- **Debian/Ubuntu**: `apt install texlive-latex-extra latexmk`
+  (or `texlive-full` for a fuller install)
+- **Windows**: [MiKTeX](https://miktex.org/) (installs `latexmk` and
+  pulls packages on demand)
+
+If you use the provided `Dockerfile`, the devcontainer, or the published
+image (see [Releases](#releases)), this is already taken care of.
 
 ## Usage
 
@@ -193,6 +204,37 @@ docker run --rm -v "$(cd ../my-cv && pwd):/app/data" make_cv \
     -t /app/data/template.tex.jinja -d /app/data/your-cv.yaml -o /app/data/output/cv --pdf --overwrite
 ```
 
+## Releases
+
+Tagging a `v*` commit runs the `Release` workflow
+([`.github/workflows/release.yml`](./.github/workflows/release.yml)),
+which runs the tests and then publishes:
+
+- **A Docker image** to the GitHub Container Registry,
+  `ghcr.io/vojtech-krupicka/py-make-my-cv:<version>` (and `:latest`),
+  bundling the LaTeX toolchain so `--pdf` works with no local install:
+
+  ```bash
+  docker run --rm -v "$(cd ../my-cv && pwd):/app/data" \
+      ghcr.io/vojtech-krupicka/py-make-my-cv:latest \
+      -t /app/data/template.tex.jinja -d /app/data/your-cv.yaml -o /app/data/output/cv --pdf --overwrite
+  ```
+
+- **A GitHub Release** with notes pulled from
+  [`CHANGELOG.md`](./CHANGELOG.md) and `make_cv.py` attached as a
+  downloadable single-file asset.
+
+To cut one:
+
+```bash
+# update the CHANGELOG: move [Unreleased] items under a new ## [x.y.z] heading
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The first image push creates a **private** GHCR package; make it public
+once in the package settings if you want unauthenticated `docker pull`.
+
 ## Data file format
 
 The data file (YAML or JSON) is validated against the `CVData` Pydantic
@@ -312,11 +354,15 @@ needed just to run the tests.
 
 ```
 .
-├── make_cv.py                 # main script
+├── make_cv.py                 # main script (PEP 723 inline deps + embedded Markdown template)
 ├── tests/
 │   └── test_make_cv.py        # unittest test suite
 ├── requirements.txt           # Python dependencies
 ├── Dockerfile                 # Debian Bookworm + Python + latexmk/TeX Live, runs as user "vscode"
+├── CHANGELOG.md               # release notes (source for GitHub Releases)
+├── CLAUDE.md                  # project context for humans / AI assistants
+├── .github/
+│   └── workflows/release.yml  # on v* tag: test, push GHCR image, create Release
 ├── .devcontainer/
 │   └── devcontainer.json      # VS Code Dev Container config (mounts ../my-cv at /app/data)
 ├── .vscode/

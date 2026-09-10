@@ -76,3 +76,15 @@ Reference files currently in `../my-cv`:
 - The host used for some past edits had **no pip and no pydantic**; the
   suite must be run inside the container (or anywhere `pip install -r
   requirements.txt` has been done) to exercise the real Pydantic models.
+- `make_cv.py` carries PEP 723 inline deps (kept in sync with
+  `requirements.txt`, minus `kachlog`), so `uv run make_cv.py …` works
+  with no environment setup.
+
+## Releasing
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`: run tests →
+build & push `ghcr.io/vojtech-krupicka/py-make-my-cv` → create a GitHub
+Release from the matching `## [x.y.z]` section of `CHANGELOG.md` with
+`make_cv.py` attached. Before tagging, move `[Unreleased]` items under a
+new dated `## [x.y.z]` heading and update the link refs at the bottom of
+the changelog.

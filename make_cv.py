@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "jinja2>=3.1,<4",
+#     "pyyaml>=6.0,<7",
+#     "pydantic>=2.0,<3",
+# ]
+# ///
 """
 make_cv.py
 
@@ -9,12 +17,16 @@ baked into this module, is always written alongside the .tex file.
 
 Tested target: Python 3 as shipped with Debian Bookworm (3.11).
 
-Requirements (install with pip):
+Run without installing anything (deps declared inline, PEP 723):
+    uv run make_cv.py -t template.tex.jinja -d data.yaml
+
+Or install the dependencies yourself:
     pip install jinja2 pyyaml pydantic
 
 For --pdf you additionally need a LaTeX distribution providing
-`latexmk` and `pdflatex` (e.g. `apt install texlive-latex-extra latexmk`,
-or `texlive-full` for a fuller install).
+`latexmk` and `pdflatex` (e.g. `apt install texlive-latex-extra latexmk`
+on Debian, MiKTeX on Windows, or `texlive-full` for a fuller install) --
+or use the Docker image, which bundles it.
 """
 
 from __future__ import annotations
