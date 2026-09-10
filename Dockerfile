@@ -34,16 +34,24 @@ WORKDIR /app
 # Install Python dependencies first so this layer is cached unless
 # requirements.txt changes.
 COPY requirements.txt .
+
 # Debian's system Python is "externally managed" (PEP 668); this is an
 # isolated container so installing system-wide is fine.
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
-COPY make_cv.py .
+# Create and set user to vscode
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
 
-# Templates/data/output are expected to be mounted at runtime, e.g.:
-#   docker run --rm -v "$PWD:/data" make_cv \
-#       -t /data/template.tex.jinja -d /data/data.yaml -o /data/cv --pdf
-WORKDIR /data
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID --shell /bin/bash -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+USER $USERNAME
+
+COPY make_cv.py .
 
 ENTRYPOINT ["python3", "/app/make_cv.py"]
 CMD ["--help"]
